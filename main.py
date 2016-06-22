@@ -18,7 +18,6 @@ import socket
 gi.require_version('Gtk', '3.0')
 gi.require_version('WebKit2', '3.0')
 
-from gi.repository import WebKit2
 from gi.repository import Gtk
 from gi.repository import Gdk
 
@@ -33,6 +32,8 @@ class Handler(object):
 
         self.client = Client()
 
+        self.client.client = "JauriaLobby"
+
         self.notebook = builder.get_object("notebook1")
 
         self.username_login = builder.get_object("entry_username_login")
@@ -45,7 +46,6 @@ class Handler(object):
         self.dialog_message = builder.get_object("label_dialog")
 
     def on_applicationwindow1_delete_event(self, *args):
-        print("Bye bye..")
         self.client.disconnect()
         Gtk.main_quit(*args)
 
@@ -65,7 +65,6 @@ class Handler(object):
             elif password is "":
                 self.dialog_message.set_text("Empty password")
                 dialog.show()
-                print("empty password")
             else:
                 login_data = True
 
@@ -73,9 +72,28 @@ class Handler(object):
                 self.client.username = username
                 self.client.password = password
 
-                self.client.login()
+                msg = self.client.login()
 
-                self.notebook.set_current_page(1)
+                if msg == "OK":
+
+                    self.client.start_timer()
+
+                    channel = "jauriarts"
+                    self.client.join(channel)
+
+                    channel = self.client.channels.__getitem__("jauriarts")
+
+                    channel_users = channel.get_users()
+
+                    print(channel_users)
+
+                    self.notebook.set_current_page(1)
+
+                elif msg == "SERVERDOWN":
+                    self.dialog_message.set_text("Server down")
+                    dialog.show()
+
+
 
     def on_button_register_clicked(self, widget, data=None):
         if self.client.connected is False:

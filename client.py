@@ -22,9 +22,6 @@ class Client:
         self.channels = ChannelList()
         self.flags = Flags()
 
-        self.updateThread = Thread(target=self.monitor)
-        self.updateThread.daemon = True
-
         self.server = "lobby.springrts.com"
         self.port = "8200"
 
@@ -37,6 +34,8 @@ class Client:
         self.client = ""
         self.chatinput = ""
         self.users = dict()
+
+        self.timer = Timer(60, self.ping_server)
 
     def login(self):
         connected = self.connect(self.server, self.port)
@@ -51,11 +50,10 @@ class Client:
                 self.socket.sendall(msg.encode('utf-8'))
                 self.receive()
                 if self.connected:
-
-                    self.updateThread.start()
+                    self.receive()
                     return "OK"
                 else:
-                    return "INVALIDUSERNAME"
+                    return "SERVERDOWN"
 
             except Exception as e:
                 print("Cannot send login command")
@@ -89,11 +87,16 @@ class Client:
             return "SERVERDOWN"
 
     def disconnect(self):
+        self.timer.cancel()
         msg = ("EXIT %s\n" % ("leave"))
         print("disconnect")
 
-    def join(self):
+    def join(self, channel_name):
         print("join")
+        msg = "JOIN %s\n"% channel_name
+        self.socket.sendall(msg.encode('utf-8'))
+        time.sleep(1)
+        self.receive()
 
     def leave(self):
         print("leave")
@@ -115,8 +118,8 @@ class Client:
             self.connected = False
             print("Cannot connect, retrying in 40 secs...")
             print(e)
-            return False
             time.sleep(40.0)
+            return False
 
     def parsecommand(self, command, args):
         if command.strip() != "":
@@ -124,57 +127,67 @@ class Client:
             if command == "JOIN" and len(args) >= 1:
                 if not args[0] in self.channels:
                     self.channels.add(args[0])
-                    Log.good("Joined #%s" % args[0])
+                    print("Joined #%s" % args[0])
+
             elif command == "FORCELEAVECHANNEL" and len(args) >= 2:
                 if args[0] in self.channels:
                     self.channels.remove(args[0])
                     Log.bad("I've been kicked from #%s by <%s>" % (args[0], args[1]))
                 else:
-                    Log.error("I've been kicked from a channel that i haven't joined")
+                    print("I've been kicked from a channel that i haven't joined")
+
             elif command == "TASSERVER":
-                Log.good("Connected to server")
+                print("Connected to server")
                 if self.flags.register:
                     self.register(self.uname, self.password)
                     self.receive()
                 else:
                     self.events.onconnected()
+
             elif command == 'LEFT':
                 chan = args[0]
                 nick = args[1]
                 self.channels[chan].del_user(self.users[nick])
+
             elif command == 'JOINED':
                 chan = args[0]
                 nick = args[1]
                 self.channels[chan].add_user(self.users[nick])
+
             elif command == 'CLIENTS':
                 chan = args[0]
                 for nick in args[1:]:
                     self.channels[chan].add_user(self.users[nick])
+
             elif command == "AGREEMENTEND":
                 Log.notice("accepting agreement")
                 self.socket.send("CONFIRMAGREEMENT\n")
                 self.login(self.uname, self.password, "BOT", 2000)
                 self.events.onloggedin(self.socket)
+
             elif command == "MOTD":
                 self.events.onmotd(" ".join(args))
+
             elif command == "ACCEPTED":
                 self.connected = True
-            elif command == "DENIED" and ' '.join(args).lower().count("already") == 0:
-                print("Login failed ( %s ), trying to register..." % ' '.join(args))
+
+            elif command == "DENIED":
+                print("Login failed")
                 print("Closing Connection")
                 self.socket.close()
-                self.flags.register = True
-                self.connect(self.lastserver, self.lastport)
+
             elif command == "REGISTRATIONACCEPTED":
                 print("Registered")
                 print("Closing Connection")
                 self.socket.close()
                 self.flags.register = False
                 self.connect(self.lastserver, self.lastport)
+
             elif command == "PONG":
                 print("PONG")
                 self.lpo = time.time()
                 self.events.onpong()
+
             elif command == "JOINEDBATTLE" and len(args) >= 2:
                 try:
                     self.users[args[1]].battleid = int(args[0])
@@ -183,7 +196,6 @@ class Client:
                           (command, str(args)))
                     print(traceback.format_exc())
             elif command == "BATTLEOPENED" and len(args) >= 4:
-                self.users[args[3]].battleid = int(args[0])
                 try:
                     self.users[args[3]].battleid = int(args[0])
                 except Exception:
@@ -197,8 +209,10 @@ class Client:
                     print("Invalid LEFTBATTLE Command from server: %s %s" %
                           (command, str(args)))
                     print(traceback.format_exc())
+
             elif command == "SAIDPRIVATE" and len(args) >= 2:
                 self.events.onsaidprivate(args[0], ' '.join(args[1:]))
+
             elif command == "ADDUSER":
                 try:
                     if len(args) == 4:
@@ -213,6 +227,7 @@ class Client:
                     print("Invalid ADDUSER Command from server: %s %s" %
                           (command, str(args)))
                     print(e)
+
             elif command == "REMOVEUSER":
                 if len(args) == 1:
                     if args[0] in self.users:
@@ -221,7 +236,8 @@ class Client:
                     else:
                         print("Invalid REMOVEUSER Command: no such user %s" % args[0])
                 else:
-                    Log.error("Invalid REMOVEUSER Command: not enough arguments")
+                    print("Invalid REMOVEUSER Command: not enough arguments")
+
             elif command == "CLIENTSTATUS":
                 if len(args) == 2:
                     if args[0] in self.users:
@@ -234,18 +250,11 @@ class Client:
                         print("Invalid CLIENTSTATUS: No such user <%s>" % args[0])
 
     def start_timer(self):
-        Timer(60, self.ping_server, ()).start()
-
-    def monitor(self):
-        self.start_timer()
-
-        while (True):
-            self.receive()
+        self.timer.start()
 
     def ping_server(self):
         print("PING")
-        self.start_timer()
-        msg = ("PING")
+        msg = "PING"
         self.socket.sendall(msg.encode('utf-8'))
         self.receive()
 
