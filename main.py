@@ -25,16 +25,36 @@ from gi.repository.GdkPixbuf import Pixbuf, InterpType
 
 from client import Client
 
+class ChatUsers(object):
+
+    def __init__(self):
+        print("INIT CHAT USERS")
+
+    # sets chat user lis names in the treestore
+    def set_list_model(self, widget, data):
+
+        model = widget.get_model()
+        widget.set_model(None)
+        model.clear()
+
+        for x in data:
+            model.append([x.username])
+
+        widget.set_model(model)
 
 class Handler(object):
 
     def __init__(self):
 
         self.client = Client()
+        self.chat_users = ChatUsers()
 
         self.client.client = "JauriaLobby"
 
         self.notebook = builder.get_object("notebook1")
+
+        self.cellrenderer_chat_username = builder.get_object("cellrenderertext_chat_username")
+        self.treeview_chat_users = builder.get_object("treeview_chat_users")
 
         self.username_login = builder.get_object("entry_username_login")
         self.password_login = builder.get_object("entry_password_login")
@@ -76,18 +96,20 @@ class Handler(object):
 
                 if msg == "OK":
 
-                    self.client.start_timer()
+                    if self.client.connected:
 
-                    channel = "jauriarts"
-                    self.client.join(channel)
+                        self.client.start_timer()
 
-                    channel = self.client.channels.__getitem__("jauriarts")
+                        channel = "jauriarts"
+                        self.client.join(channel)
 
-                    channel_users = channel.get_users()
+                        channel = self.client.channels.__getitem__("jauriarts")
 
-                    print(channel_users)
+                        channel_users = channel.get_users()
 
-                    self.notebook.set_current_page(1)
+                        self.chat_users.set_list_model(self.treeview_chat_users, channel_users)
+
+                        self.notebook.set_current_page(1)
 
                 elif msg == "SERVERDOWN":
                     self.dialog_message.set_text("Server down")
