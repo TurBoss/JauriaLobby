@@ -12,6 +12,7 @@ from sys import argv
 import os
 import gi
 import ast
+import time
 
 import socket
 
@@ -23,12 +24,17 @@ from gi.repository import Gdk
 
 from gi.repository.GdkPixbuf import Pixbuf, InterpType
 
-from client import Client
+from lobby_client import LobbyClient
 
-class ChatUsers(object):
+class Lobby(object):
 
     def __init__(self):
-        print("INIT CHAT USERS")
+        print("INIT LOBBY")
+
+    def append_text_to_chat(self, widget, username, message):
+        model = widget.get_model()
+
+        model.append([username, message])
 
     # sets chat user lis names in the treestore
     def set_list_model(self, widget, data):
@@ -46,15 +52,15 @@ class Handler(object):
 
     def __init__(self):
 
-        self.client = Client()
-        self.chat_users = ChatUsers()
-
-        self.client.client = "JauriaLobby"
+        self.client = LobbyClient()
+        self.lobby = Lobby()
 
         self.notebook = builder.get_object("notebook1")
 
         self.cellrenderer_chat_username = builder.get_object("cellrenderertext_chat_username")
         self.treeview_chat_users = builder.get_object("treeview_chat_users")
+
+        self.treeview_chat_log = builder.get_object("treeview_chat_log")
 
         self.username_login = builder.get_object("entry_username_login")
         self.password_login = builder.get_object("entry_password_login")
@@ -66,7 +72,6 @@ class Handler(object):
         self.dialog_message = builder.get_object("label_dialog")
 
     def on_applicationwindow1_delete_event(self, *args):
-        self.client.disconnect()
         Gtk.main_quit(*args)
 
     def on_button_dialog_clicked(self, widget, data=None):
@@ -95,7 +100,6 @@ class Handler(object):
                 msg = self.client.login()
 
                 if msg == "OK":
-
                     if self.client.connected:
 
                         self.client.start_timer()
@@ -104,10 +108,8 @@ class Handler(object):
                         self.client.join(channel)
 
                         channel = self.client.channels.__getitem__("jauriarts")
-
                         channel_users = channel.get_users()
-
-                        self.chat_users.set_list_model(self.treeview_chat_users, channel_users)
+                        self.lobby.set_list_model(self.treeview_chat_users, channel_users)
 
                         self.notebook.set_current_page(1)
 
