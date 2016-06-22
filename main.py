@@ -15,6 +15,7 @@ import ast
 import time
 
 import socket
+import threading
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('WebKit2', '3.0')
@@ -31,78 +32,68 @@ class Lobby(object):
 
     def __init__(self, app):
         self.app = app
-
         self.client = LobbyClient()
-        print("INIT LOBBY")
+        time.sleep(0.5)
+        self.client.Recv()
 
     def login(self):
         username = self.app.username_login.get_text()
         password = self.app.password_login.get_text()
 
-        login_data = False
-
         if username is "":
             self.app.dialog_message.set_text("Empty username")
             dialog.show()
+
         elif password is "":
             self.app.dialog_message.set_text("Empty password")
             dialog.show()
-        else:
-            login_data = True
 
-        if login_data:
+        else:
             self.client.username = username
             self.client.password = password
 
             if self.client.connected:
 
-                self.client.Run(100)
+                self.client.out_LOGIN()
+                self.client.Recv()
+
                 self.app.notebook.set_current_page(1)
 
-            elif msg == "SERVERDOWN":
-                self.app.dialog_message.set_text("Server down")
-                dialog.show()
 
     def register(self):
-        if self.client.connected is False:
-            username = self.username_register.get_text()
-            password = self.password_register.get_text()
-            password2 = self.password2_register.get_text()
+        username = self.app.username_register.get_text()
+        password = self.app.password_register.get_text()
+        password2 = self.app.password2_register.get_text()
 
-            register_data = False
+        if username is "":
+            self.app.dialog_message.set_text("Empty username")
+            dialog.show()
 
-            if username is "":
-                self.app.dialog_message.set_text("Empty username")
-                dialog.show()
+        elif password is "":
+            self.app.dialog_message.set_text("Empty password")
+            dialog.show()
 
-            elif password is "":
-                self.app.dialog_message.set_text("Empty password")
-                dialog.show()
+        elif password2 is "":
+            self.app.dialog_message.set_text("Retype password")
+            dialog.show()
 
-            elif password2 is "":
-                self.app.dialog_message.set_text("Retype password")
-                dialog.show()
+        else:
+            self.client.username = username
+            self.client.password = password
+            self.client.password2 = password2
 
-            else:
-                register_data = True
+            """
+            msg = self.app.client.register()
 
-            if register_data:
-                self.client.username = username
-                self.client.password = password
-                self.client.password2 = password2
+            if msg == "REGISTRATIONDENIED":
+                self.app.dialog_message.set_text("Register failed")
+            elif msg == "SERVERDOWN":
+                self.app.dialog_message.set_text("Server Down")
+            elif msg == "REGISTRATIONACCEPTED":
+                self.app.dialog_message.set_text("Now you can login")
 
-                """
-                msg = self.app.client.register()
-
-                if msg == "REGISTRATIONDENIED":
-                    self.app.dialog_message.set_text("Register failed")
-                elif msg == "SERVERDOWN":
-                    self.app.dialog_message.set_text("Server Down")
-                elif msg == "REGISTRATIONACCEPTED":
-                    self.app.dialog_message.set_text("Now you can login")
-
-                dialog.show()
-                """
+            dialog.show()
+            """
 
     def append_text_to_chat(self, widget, username, message):
         model = widget.get_model()

@@ -60,16 +60,7 @@ class LobbyClient:
         self.password2 = ""
 
         self.OpenSocket((MAIN_SERVER))
-        self.Init()
 
-    def OpenSocket(self, server_addr):
-        while (self.host_socket == None):
-            # non-blocking so we do not have to wait on server
-            self.host_socket = socket.create_connection(server_addr)
-            self.host_socket.setblocking(0)
-            self.connected = True
-
-    def Init(self):
         self.prv_ping_time = time.time()
         self.num_ping_msgs = 0
         self.max_ping_time = 0.0
@@ -96,7 +87,7 @@ class LobbyClient:
         self.server_info = ("", "", "", "")
 
         self.requested_registration = False  # set on out_REGISTER
-        self.requested_authentication = True  # set on out_LOGIN
+        self.requested_authentication = False  # set on out_LOGIN
         self.accepted_registration = False  # set on in_REGISTRATIONACCEPTED
         self.rejected_registration = False  # set on in_REGISTRATIONDENIED
         self.accepted_authentication = False  # set on in_ACCEPTED
@@ -104,6 +95,18 @@ class LobbyClient:
         self.received_public_key = False
         self.want_secure_session = True
         self.want_msg_auth_codes = True
+
+        self.Init()
+
+    def OpenSocket(self, server_addr):
+        while (self.host_socket == None):
+            # non-blocking so we do not have to wait on server
+            self.host_socket = socket.socket()
+            self.host_socket.connect(server_addr)
+            self.host_socket.setblocking(0)
+            self.connected = True
+
+    def Init(self):
 
         self.reset_session_state()
 
@@ -151,35 +154,36 @@ class LobbyClient:
 
         buf = ""
 
-        if (self.use_secure_session() or want_secure_command(data)):
+        if self.use_secure_session() or want_secure_command(data):
             self.data_send_queue.append(data)
 
-            if (self.client_acked_shared_key):
+            if self.client_acked_shared_key:
                 self.data_send_queue.reverse()
 
                 # encrypt everything in the queue
                 # message order in reversed queue is newest to
                 # oldest, but we pop() from the back so server
                 # receives in proper order
-                if (batch):
-                    while (len(self.data_send_queue) > 0):
+                if batch:
+                    while len(self.data_send_queue) > 0:
                         buf += (self.data_send_queue.pop() + DATA_PARTIT_BYTE)
 
                     # batch-encrypt into one blob (more efficient)
                     buf = wrap_encrypt_sign_message(buf)
                 else:
-                    while (len(self.data_send_queue) > 0):
+                    while len(self.data_send_queue) > 0:
                         buf += wrap_encrypt_sign_message(self.data_send_queue.pop() + DATA_PARTIT_BYTE)
 
         else:
             buf = data + DATA_PARTIT_BYTE
 
-        if (len(buf) == 0):
+        if len(buf) == 0:
             return
 
         self.host_socket.send(buf.encode("UTF-8"))
 
     def Recv(self):
+        print("receive")
         num_received_bytes = len(self.socket_data)
 
         try:
@@ -245,7 +249,7 @@ class LobbyClient:
 
         numspaces = msg.count(' ')
 
-        if (numspaces > 0):
+        if numspaces > 0:
             command, args = msg.split(' ', 1)
         else:
             command = msg
@@ -284,7 +288,7 @@ class LobbyClient:
     def out_LOGIN(self):
         print("[LOGIN][time=%d::iter=%d] sec_sess=%d" % (time.time(), self.iters, self.use_secure_session()))
 
-        if (self.use_secure_session()):
+        if self.use_secure_session():
             self.Send("LOGIN %s %s" % (self.username, ENCODE_FUNC(self.password)))
         else:
             self.Send("LOGIN %s %s" % (self.username, ENCODE_FUNC(LEGACY_HASH_FUNC(self.password.encode("UTF-8")).digest())))
@@ -294,7 +298,7 @@ class LobbyClient:
     def out_REGISTER(self):
         print("[REGISTER][time=%d::iter=%d] sec_sess=%d" % (time.time(), self.iters, self.use_secure_session()))
 
-        if (self.use_secure_session()):
+        if self.use_secure_session():
             self.Send("REGISTER %s %s" % (self.username, ENCODE_FUNC(self.password)))
         else:
             self.Send("REGISTER %s %s" % (self.username, ENCODE_FUNC(LEGACY_HASH_FUNC(self.password).digest())))
