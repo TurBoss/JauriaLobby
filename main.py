@@ -26,10 +26,83 @@ from gi.repository.GdkPixbuf import Pixbuf, InterpType
 
 from lobby_client import LobbyClient
 
+
 class Lobby(object):
 
-    def __init__(self):
+    def __init__(self, app):
+        self.app = app
+
+        self.client = LobbyClient()
         print("INIT LOBBY")
+
+    def login(self):
+        username = self.app.username_login.get_text()
+        password = self.app.password_login.get_text()
+
+        login_data = False
+
+        if username is "":
+            self.app.dialog_message.set_text("Empty username")
+            dialog.show()
+        elif password is "":
+            self.app.dialog_message.set_text("Empty password")
+            dialog.show()
+        else:
+            login_data = True
+
+        if login_data:
+            self.client.username = username
+            self.client.password = password
+
+            if self.client.connected:
+
+                self.client.Run(100)
+                self.app.notebook.set_current_page(1)
+
+            elif msg == "SERVERDOWN":
+                self.app.dialog_message.set_text("Server down")
+                dialog.show()
+
+    def register(self):
+        if self.client.connected is False:
+            username = self.username_register.get_text()
+            password = self.password_register.get_text()
+            password2 = self.password2_register.get_text()
+
+            register_data = False
+
+            if username is "":
+                self.app.dialog_message.set_text("Empty username")
+                dialog.show()
+
+            elif password is "":
+                self.app.dialog_message.set_text("Empty password")
+                dialog.show()
+
+            elif password2 is "":
+                self.app.dialog_message.set_text("Retype password")
+                dialog.show()
+
+            else:
+                register_data = True
+
+            if register_data:
+                self.client.username = username
+                self.client.password = password
+                self.client.password2 = password2
+
+                """
+                msg = self.app.client.register()
+
+                if msg == "REGISTRATIONDENIED":
+                    self.app.dialog_message.set_text("Register failed")
+                elif msg == "SERVERDOWN":
+                    self.app.dialog_message.set_text("Server Down")
+                elif msg == "REGISTRATIONACCEPTED":
+                    self.app.dialog_message.set_text("Now you can login")
+
+                dialog.show()
+                """
 
     def append_text_to_chat(self, widget, username, message):
         model = widget.get_model()
@@ -52,8 +125,7 @@ class Handler(object):
 
     def __init__(self):
 
-        self.client = LobbyClient()
-        self.lobby = Lobby()
+        self.lobby = Lobby(self)
 
         self.notebook = builder.get_object("notebook1")
 
@@ -78,85 +150,10 @@ class Handler(object):
         dialog.hide()
 
     def on_button_login_clicked(self, widget, data=None):
-        if self.client.connected is False:
-            username = self.username_login.get_text()
-            password = self.password_login.get_text()
-
-            login_data = False
-
-            if username is "":
-                self.dialog_message.set_text("Empty username")
-                dialog.show()
-            elif password is "":
-                self.dialog_message.set_text("Empty password")
-                dialog.show()
-            else:
-                login_data = True
-
-            if login_data:
-                self.client.username = username
-                self.client.password = password
-
-                msg = self.client.login()
-
-                if msg == "OK":
-                    if self.client.connected:
-
-                        self.client.start_timer()
-
-                        channel = "jauriarts"
-                        self.client.join(channel)
-
-                        channel = self.client.channels.__getitem__("jauriarts")
-                        channel_users = channel.get_users()
-                        self.lobby.set_list_model(self.treeview_chat_users, channel_users)
-
-                        self.notebook.set_current_page(1)
-
-                elif msg == "SERVERDOWN":
-                    self.dialog_message.set_text("Server down")
-                    dialog.show()
-
-
+        self.lobby.login()
 
     def on_button_register_clicked(self, widget, data=None):
-        if self.client.connected is False:
-            username = self.username_register.get_text()
-            password = self.password_register.get_text()
-            password2 = self.password2_register.get_text()
-
-            register_data = False
-
-            if username is "":
-                self.dialog_message.set_text("Empty username")
-                dialog.show()
-
-            elif password is "":
-                self.dialog_message.set_text("Empty password")
-                dialog.show()
-
-            elif password2 is "":
-                self.dialog_message.set_text("Retype password")
-                dialog.show()
-
-            else:
-                register_data = True
-
-            if register_data:
-                self.client.username = username
-                self.client.password = password
-                self.client.password2 = password2
-
-                msg = self.client.register()
-
-                if msg == "REGISTRATIONDENIED":
-                    self.dialog_message.set_text("Register failed")
-                elif msg == "SERVERDOWN":
-                    self.dialog_message.set_text("Server Down")
-                elif msg == "REGISTRATIONACCEPTED":
-                    self.dialog_message.set_text("Now you can login")
-
-                dialog.show()
+        self.lobby.register()
 
 
 builder = Gtk.Builder()

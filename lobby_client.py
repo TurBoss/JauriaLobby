@@ -9,21 +9,21 @@ import traceback
 from base64 import b64encode as ENCODE_FUNC
 # from base64 import b64decode as DECODE_FUNC
 
-import CryptoHandler
+import crypto_handler
 
-from CryptoHandler import MD5LEG_HASH_FUNC as LEGACY_HASH_FUNC
-from CryptoHandler import SHA256_HASH_FUNC as SECURE_HASH_FUNC
-from CryptoHandler import GLOBAL_RAND_POOL
+from crypto_handler import MD5LEG_HASH_FUNC as LEGACY_HASH_FUNC
+from crypto_handler import SHA256_HASH_FUNC as SECURE_HASH_FUNC
+from crypto_handler import GLOBAL_RAND_POOL
 
-from CryptoHandler import safe_decode as SAFE_DECODE_FUNC
-from CryptoHandler import encrypt_sign_message
-from CryptoHandler import decrypt_auth_message
-from CryptoHandler import int32_to_str
-from CryptoHandler import str_to_int32
+from crypto_handler import safe_decode as SAFE_DECODE_FUNC
+from crypto_handler import encrypt_sign_message
+from crypto_handler import decrypt_auth_message
+from crypto_handler import int32_to_str
+from crypto_handler import str_to_int32
 
-from CryptoHandler import DATA_MARKER_BYTE
-from CryptoHandler import DATA_PARTIT_BYTE
-from CryptoHandler import UNICODE_ENCODING
+from crypto_handler import DATA_MARKER_BYTE
+from crypto_handler import DATA_PARTIT_BYTE
+from crypto_handler import UNICODE_ENCODING
 
 NUM_CLIENTS = 1
 NUM_UPDATES = 10000
@@ -57,14 +57,15 @@ class LobbyClient:
 
         self.username = ""
         self.password = ""
+        self.password2 = ""
 
-        self.OpenSocket("lobby.springrts.com")
+        self.OpenSocket((MAIN_SERVER))
         self.Init()
 
     def OpenSocket(self, server_addr):
         while (self.host_socket == None):
             # non-blocking so we do not have to wait on server
-            self.host_socket = socket.create_connection(server_addr, 5)
+            self.host_socket = socket.create_connection(server_addr)
             self.host_socket.setblocking(0)
             self.connected = True
 
@@ -76,8 +77,8 @@ class LobbyClient:
         self.sum_ping_time = 0.0
         self.iters = 0
 
-        self.aes_cipher_obj = CryptoHandler.aes_cipher("")
-        self.rsa_cipher_obj = CryptoHandler.rsa_cipher(None)
+        self.aes_cipher_obj = crypto_handler.aes_cipher("")
+        self.rsa_cipher_obj = crypto_handler.rsa_cipher(None)
 
         # start with a NULL session-key
         self.set_session_key("")
@@ -95,7 +96,7 @@ class LobbyClient:
         self.server_info = ("", "", "", "")
 
         self.requested_registration = False  # set on out_REGISTER
-        self.requested_authentication = False  # set on out_LOGIN
+        self.requested_authentication = True  # set on out_LOGIN
         self.accepted_registration = False  # set on in_REGISTRATIONACCEPTED
         self.rejected_registration = False  # set on in_REGISTRATIONDENIED
         self.accepted_authentication = False  # set on in_ACCEPTED
@@ -116,13 +117,13 @@ class LobbyClient:
         self.aes_cipher_obj.set_key(key)
 
     def get_session_key(self):
-        return (self.aes_cipher_obj.get_key())
+        return self.aes_cipher_obj.get_key()
 
     def use_secure_session(self):
-        return (len(self.get_session_key()) != 0)
+        return len(self.get_session_key()) != 0
 
     def use_msg_auth_codes(self):
-        return (self.want_msg_auth_codes)
+        return self.want_msg_auth_codes
 
     def reset_session_state(self):
         self.sent_unacked_shared_key = False
@@ -133,7 +134,7 @@ class LobbyClient:
         # test-client never tries to send unicode strings, so
         # we do not need to add encode(UNICODE_ENCODING) calls
         #
-        # print("[Send][time=%d::iter=%d] data=\"%s\" sec_sess=%d key_acked=%d queue=%s batch=%d" % (time.time(), self.iters, data, self.use_secure_session(), self.client_acked_shared_key, self.data_send_queue, batch))
+        print("[Send][time=%d::iter=%d] data=\"%s\" sec_sess=%d key_acked=%d queue=%s batch=%d" % (time.time(), self.iters, data, self.use_secure_session(), self.client_acked_shared_key, self.data_send_queue, batch))
         assert (type(data) == str)
 
         def want_secure_command(data):
@@ -176,19 +177,19 @@ class LobbyClient:
         if (len(buf) == 0):
             return
 
-        self.host_socket.send(buf)
+        self.host_socket.send(buf.encode("UTF-8"))
 
     def Recv(self):
         num_received_bytes = len(self.socket_data)
 
         try:
-            self.socket_data += self.host_socket.recv(4096)
+            self.socket_data += str(self.host_socket.recv(4096))
+            print(self.socket_data)
         except:
             return
-
-        if (len(self.socket_data) == num_received_bytes):
+        if len(self.socket_data) == num_received_bytes:
             return
-        if (self.socket_data.count(DATA_PARTIT_BYTE) == 0):
+        if self.socket_data.count(DATA_PARTIT_BYTE) == 0:
             return
 
         split_data = self.socket_data.split(DATA_PARTIT_BYTE)
@@ -198,25 +199,25 @@ class LobbyClient:
         def check_message_timestamp(msg):
             ctr = str_to_int32(msg)
 
-            if (ctr <= self.incoming_msg_ctr):
+            if ctr <= self.incoming_msg_ctr:
                 return False
 
             self.incoming_msg_ctr = ctr
             return True
 
         for raw_data_blob in data_blobs:
-            if (len(raw_data_blob) == 0):
+            if len(raw_data_blob) == 0:
                 continue
 
-            if (self.use_secure_session()):
+            if self.use_secure_session():
                 dec_data_blob = decrypt_auth_message(self.aes_cipher_obj, raw_data_blob, self.use_msg_auth_codes())
 
                 # can only happen in case of an invalid MAC or missing timestamp
-                if (len(dec_data_blob) < 4):
+                if len(dec_data_blob) < 4:
                     continue
 
                 # ignore any replayed messages
-                if (not check_message_timestamp(dec_data_blob[0: 4])):
+                if not check_message_timestamp(dec_data_blob[0: 4]):
                     continue
 
                 # after decryption dec_command might represent a batch of
@@ -228,12 +229,11 @@ class LobbyClient:
                 for command in strip_commands:
                     self.Handle(command)
             else:
-                if (raw_data_blob[0] == DATA_MARKER_BYTE):
+                if raw_data_blob[0] == DATA_MARKER_BYTE:
                     continue
 
                 # strips leading spaces and trailing carriage return
                 self.Handle((raw_data_blob.rstrip('\r')).lstrip(' '))
-
         self.socket_data = final_blob
 
     def Handle(self, msg):
@@ -258,17 +258,17 @@ class LobbyClient:
         total_args = len(function_info[0]) - 1
         optional_args = 0
 
-        if (function_info[3]):
+        if function_info[3]:
             optional_args = len(function_info[3])
 
         required_args = total_args - optional_args
 
-        if (required_args == 0 and numspaces == 0):
+        if required_args == 0 and numspaces == 0:
             function()
             return True
 
         # bunch the last words together if there are too many of them
-        if (numspaces > total_args - 1):
+        if numspaces > total_args - 1:
             arguments = args.split(' ', total_args - 1)
         else:
             arguments = args.split(' ')
@@ -287,7 +287,7 @@ class LobbyClient:
         if (self.use_secure_session()):
             self.Send("LOGIN %s %s" % (self.username, ENCODE_FUNC(self.password)))
         else:
-            self.Send("LOGIN %s %s" % (self.username, ENCODE_FUNC(LEGACY_HASH_FUNC(self.password).digest())))
+            self.Send("LOGIN %s %s" % (self.username, ENCODE_FUNC(LEGACY_HASH_FUNC(self.password.encode("UTF-8")).digest())))
 
         self.requested_authentication = True
 
@@ -339,7 +339,7 @@ class LobbyClient:
         assert (not self.server_valid_shared_key)
         assert (not self.client_acked_shared_key)
 
-        def generate_session_key(num_bytes=CryptoHandler.MIN_AES_KEY_SIZE * 2):
+        def generate_session_key(num_bytes=crypto_handler.MIN_AES_KEY_SIZE * 2):
             # encrypt converts its argument to a long, so the
             # MSB should *always* be non-zero or D(E(K)) != K
             key_head = "\x00"
@@ -418,7 +418,7 @@ class LobbyClient:
 
         rsa_pub_key_str = SAFE_DECODE_FUNC(enc_pem_pub_key)
         rsa_pub_key_obj = self.rsa_cipher_obj.import_key(rsa_pub_key_str)
-        rsa_pri_key_obj = CryptoHandler.RSA_NULL_KEY_OBJ
+        rsa_pri_key_obj = crypto_handler.RSA_NULL_KEY_OBJ
         # this enables key decryption (to emulate server) for local testing
         # rsa_pri_key_obj = self.rsa_cipher_obj.import_key(CryptoHandler.read_file("server-rsa-keys/rsa_pri_key.pem", "r"))
 
@@ -427,8 +427,8 @@ class LobbyClient:
         self.rsa_cipher_obj.set_pri_key(rsa_pri_key_obj)
 
         # these should be equal to the server-side schemes
-        self.rsa_cipher_obj.set_pad_scheme(CryptoHandler.RSA_PAD_SCHEME)
-        self.rsa_cipher_obj.set_sgn_scheme(CryptoHandler.RSA_SGN_SCHEME)
+        self.rsa_cipher_obj.set_pad_scheme(crypto_handler.RSA_PAD_SCHEME)
+        self.rsa_cipher_obj.set_sgn_scheme(crypto_handler.RSA_SGN_SCHEME)
 
         print("[PUBLICKEY][time=%d::iter=%d] pub_key=%s" % (time.time(), self.iters, rsa_pub_key_str))
 
@@ -641,9 +641,8 @@ class LobbyClient:
         "SAY " + msg
 
     def Update(self):
-        assert (self.host_socket != None)
+        assert self.host_socket != None
 
-        self.iters += 1
 
         # securely connect to server with existing or new account
         #   c:LOGIN -> {s:LOGACCEPT,s:LOGDENIED}
@@ -652,33 +651,25 @@ class LobbyClient:
         #     c:REGISTER -> {s:REGACCEPT,s:REGDENIED}
         #       if s:REGACCEPT -> c:LOGIN -> s:AGREEMENT -> (c:CONFAGREE, c:LOGIN) -> s:LOGACCEPT
         #       if s:REGDENIED -> exit
-        if (self.client_acked_shared_key or (not self.want_secure_session)):
-            if (not self.requested_authentication):
+        if self.client_acked_shared_key or (not self.want_secure_session):
+            if not self.requested_authentication:
                 self.out_LOGIN()
 
         # periodically re-negotiate the session key (every
         # 500*0.05=25.0s; models an ultra-paranoid client)
-        if (self.client_acked_shared_key and self.want_secure_session and self.use_secure_session()):
-            if ((self.iters % 50) == 0):
+        if self.client_acked_shared_key and self.want_secure_session and self.use_secure_session():
+            if self.iters % 50 == 0:
                 self.reset_session_state()
                 self.out_SETSHAREDKEY()
 
-        if ((self.iters % 10) == 0):
-            self.out_PING()
+        self.out_PING()
 
-        threading._sleep(0.05)
+        time.sleep(0.05)
 
         # eat through received data
         self.Recv()
 
-    def Run(self, num_iters):
-        while (self.iters < num_iters):
-            self.Update()
-
-        # say goodbye and close our socket
-        self.out_EXIT()
-
-
+"""
 def RunClients(num_clients, num_updates):
     clients = [None] * num_clients
 
@@ -691,7 +682,6 @@ def RunClients(num_clients, num_updates):
 
     for i in range(num_clients):
         clients[i].out_EXIT()
-
 
 def RunClientThread(i, k):
     client = LobbyClient(HOST_SERVER, (CLIENT_NAME % i), (CLIENT_PWRD % i))
@@ -716,3 +706,4 @@ def main():
         RunClients(NUM_CLIENTS, NUM_UPDATES)
     else:
         RunClientThreads(NUM_CLIENTS, NUM_UPDATES)
+"""
