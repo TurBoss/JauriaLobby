@@ -137,13 +137,13 @@ class LobbyClient:
         # test-client never tries to send unicode strings, so
         # we do not need to add encode(UNICODE_ENCODING) calls
         #
-        print("[Send][time=%d::iter=%d] data=\"%s\" sec_sess=%d key_acked=%d queue=%s batch=%d" % (time.time(), self.iters, data, self.use_secure_session(), self.client_acked_shared_key, self.data_send_queue, batch))
+        print(("[Send][time=%d::iter=%d] data=\"%s\" sec_sess=%d key_acked=%d queue=%s batch=%d" % (time.time(), self.iters, data, self.use_secure_session(), self.client_acked_shared_key, self.data_send_queue, batch)))
         assert (type(data) == str)
 
         def want_secure_command(data):
             cmd = data.split()
             cmd = cmd[0]
-            return (self.want_secure_session and (not cmd in ALLOWED_OPEN_COMMANDS))
+            return self.want_secure_session and (not cmd in ALLOWED_OPEN_COMMANDS)
 
         def wrap_encrypt_sign_message(raw_msg):
             raw_msg = int32_to_str(self.outgoing_msg_ctr) + raw_msg
@@ -180,15 +180,13 @@ class LobbyClient:
         if len(buf) == 0:
             return
 
-        self.host_socket.send(buf.encode("UTF-8"))
+        self.host_socket.send(buf.encode())
 
     def Recv(self):
-        print("receive")
         num_received_bytes = len(self.socket_data)
 
         try:
-            self.socket_data += str(self.host_socket.recv(4096))
-            print(self.socket_data)
+            self.socket_data += str(self.host_socket.recv(4096).decode())
         except:
             return
         if len(self.socket_data) == num_received_bytes:
@@ -281,12 +279,12 @@ class LobbyClient:
             function(*(arguments))
             return True
         except Exception as e:
-            print("Error handling: \"%s\" %s" % (msg, e))
-            print(traceback.format_exc())
+            print(("Error handling: \"%s\" %s" % (msg, e)))
+            print((traceback.format_exc()))
             return False
 
     def out_LOGIN(self):
-        print("[LOGIN][time=%d::iter=%d] sec_sess=%d" % (time.time(), self.iters, self.use_secure_session()))
+        print(("[LOGIN][time=%d::iter=%d] sec_sess=%d" % (time.time(), self.iters, self.use_secure_session())))
 
         if self.use_secure_session():
             self.Send("LOGIN %s %s" % (self.username, ENCODE_FUNC(self.password)))
@@ -296,7 +294,7 @@ class LobbyClient:
         self.requested_authentication = True
 
     def out_REGISTER(self):
-        print("[REGISTER][time=%d::iter=%d] sec_sess=%d" % (time.time(), self.iters, self.use_secure_session()))
+        print(("[REGISTER][time=%d::iter=%d] sec_sess=%d" % (time.time(), self.iters, self.use_secure_session())))
 
         if self.use_secure_session():
             self.Send("REGISTER %s %s" % (self.username, ENCODE_FUNC(self.password)))
@@ -306,11 +304,11 @@ class LobbyClient:
         self.requested_registration = True
 
     def out_CONFIRMAGREEMENT(self):
-        print("[CONFIRMAGREEMENT][time=%d::iter=%d] sec_sess=%d" % (time.time(), self.iters, self.use_secure_session()))
+        print(("[CONFIRMAGREEMENT][time=%d::iter=%d] sec_sess=%d" % (time.time(), self.iters, self.use_secure_session())))
         self.Send("CONFIRMAGREEMENT")
 
     def out_PING(self):
-        print("[PING][time=%d::iters=%d]" % (time.time(), self.iters))
+        print(("[PING][time=%d::iters=%d]" % (time.time(), self.iters)))
 
         self.Send("PING")
 
@@ -323,7 +321,7 @@ class LobbyClient:
         assert (not self.server_valid_shared_key)
         assert (not self.client_acked_shared_key)
 
-        print("[GETPUBLICKEY][time=%d::iter=%d]" % (time.time(), self.iters))
+        print(("[GETPUBLICKEY][time=%d::iter=%d]" % (time.time(), self.iters)))
 
         self.Send("GETPUBLICKEY")
 
@@ -333,9 +331,9 @@ class LobbyClient:
         assert (not self.server_valid_shared_key)
         assert (not self.client_acked_shared_key)
 
-        print("[GETSIGNEDMSG][time=%d::iter=%d]" % (time.time(), self.iters))
+        print(("[GETSIGNEDMSG][time=%d::iter=%d]" % (time.time(), self.iters)))
 
-        self.Send("GETSIGNEDMSG %s" % ENCODE_FUNC(MAGIC_WORDS))
+        self.Send("GETSIGNEDMSG %s" % ENCODE_FUNC(MAGIC_WORDS.encode()))
 
     def out_SETSHAREDKEY(self):
         assert (self.received_public_key)
@@ -356,8 +354,8 @@ class LobbyClient:
 
         # note: server will use HASH(RAW) as key and echo back HASH(HASH(RAW))
         # hence we send ENCODE(ENCRYPT(RAW)) and use HASH(RAW) on our side too
-        aes_key_raw = generate_session_key()
-        aes_key_sig = SECURE_HASH_FUNC(aes_key_raw)
+        aes_key_raw = str(generate_session_key())
+        aes_key_sig = SECURE_HASH_FUNC(aes_key_raw.encode())
         aes_key_enc = self.rsa_cipher_obj.encrypt_encode_bytes(aes_key_raw)
 
         # make a copy of the previous key (if any) since
@@ -370,8 +368,8 @@ class LobbyClient:
         self.session_key_id += 1
         self.session_key_id %= NUM_SESSION_KEYS
 
-        print("[SETSHAREDKEY][time=%d::iter=%d] client_key_sig=%s" % (
-        time.time(), self.iters, ENCODE_FUNC(SECURE_HASH_FUNC(aes_key_sig.digest()).digest())))
+        print(("[SETSHAREDKEY][time=%d::iter=%d] client_key_sig=%s" % (
+        time.time(), self.iters, ENCODE_FUNC(SECURE_HASH_FUNC(aes_key_sig.digest()).digest()))))
 
         # when re-negotiating a key during an established session,
         # reset_session_state() makes this false but we need it to
@@ -390,7 +388,7 @@ class LobbyClient:
         assert (self.server_valid_shared_key)
         assert (not self.client_acked_shared_key)
 
-        print("[ACKSHAREDKEY][time=%d::iter=%d]" % (time.time(), self.iters))
+        print(("[ACKSHAREDKEY][time=%d::iter=%d]" % (time.time(), self.iters)))
 
         # start using a new key after verification; server will have
         # already switched to it so our ACKSHAREDKEY can be decrypted
@@ -434,7 +432,7 @@ class LobbyClient:
         self.rsa_cipher_obj.set_pad_scheme(crypto_handler.RSA_PAD_SCHEME)
         self.rsa_cipher_obj.set_sgn_scheme(crypto_handler.RSA_SGN_SCHEME)
 
-        print("[PUBLICKEY][time=%d::iter=%d] pub_key=%s" % (time.time(), self.iters, rsa_pub_key_str))
+        print(("[PUBLICKEY][time=%d::iter=%d] pub_key=%s" % (time.time(), self.iters, rsa_pub_key_str)))
 
         # client should never want to connect insecurely,
         # but in case it does the server's say is *FINAL*
@@ -463,24 +461,24 @@ class LobbyClient:
     # "SIGNEDMSG %s" % (ENCODE("123456L"=SIGN(HASH(MSG))))
     #
     def in_SIGNEDMSG(self, msg_sig):
-        print("[SIGNEDMSG][time=%d::iter=%d] msg_sig=%s" % (time.time(), self.iters, msg_sig))
-        assert (self.received_public_key)
-        assert (self.rsa_cipher_obj.auth_bytes(MAGIC_WORDS, SAFE_DECODE_FUNC(msg_sig)))
+        print(("[SIGNEDMSG][time=%d::iter=%d] msg_sig=%s" % (time.time(), self.iters, msg_sig)))
+        assert self.received_public_key
+        assert self.rsa_cipher_obj.auth_bytes(str(MAGIC_WORDS), str(SAFE_DECODE_FUNC(msg_sig)))
 
     #
     # "SHAREDKEY %s %s %s" % (KEYSTATUS={"ACCEPTED", "REJECTED", "ENFORCED", "DISABLED"}, "KEYDIGEST" [, "EXTRADATA"])
     #
     def in_SHAREDKEY(self, key_status, key_digest, extra_data=""):
-        assert (self.received_public_key)
-        assert (self.sent_unacked_shared_key)
-        assert (not self.server_valid_shared_key)
-        assert (not self.client_acked_shared_key)
+        assert self.received_public_key
+        assert self.sent_unacked_shared_key
+        assert not self.server_valid_shared_key
+        assert not self.client_acked_shared_key
 
-        print("[SHAREDKEY][time=%d::iter=%d] %s %s %s" % (time.time(), self.iters, key_status, key_digest, extra_data))
+        print(("[SHAREDKEY][time=%d::iter=%d] %s %s %s" % (time.time(), self.iters, key_status, key_digest, extra_data)))
 
         can_send_ack_shared_key = False
 
-        if (key_status == "INITSESS"):
+        if key_status == "INITSESS":
             # special case during first session-key exchange
             assert (not self.use_secure_session())
             assert (len(self.session_keys[self.session_key_id]) != 0)
@@ -493,8 +491,8 @@ class LobbyClient:
             client_key_sha = SECURE_HASH_FUNC(self.session_keys[self.session_key_id])
             client_key_sig = client_key_sha.digest()
 
-            print("\tserver_key_sig=%s\n\tclient_key_sig=%s (id=%d)" % (
-            ENCODE_FUNC(server_key_sig), ENCODE_FUNC(client_key_sig), self.session_key_id))
+            print(("\tserver_key_sig=%s\n\tclient_key_sig=%s (id=%d)" % (
+            ENCODE_FUNC(server_key_sig), ENCODE_FUNC(client_key_sig), self.session_key_id)))
 
             # server considers key valid and has accepted it
             # now check for data manipulation or corruption
@@ -531,18 +529,18 @@ class LobbyClient:
             self.out_ACKSHAREDKEY()
 
     def in_TASSERVER(self, protocolVersion, springVersion, udpPort, serverMode):
-        print("[TASSERVER][time=%d::iter=%d] proto=%s spring=%s udp=%s mode=%s" % (
-        time.time(), self.iters, protocolVersion, springVersion, udpPort, serverMode))
+        print(("[TASSERVER][time=%d::iter=%d] proto=%s spring=%s udp=%s mode=%s" % (
+        time.time(), self.iters, protocolVersion, springVersion, udpPort, serverMode)))
         self.server_info = (protocolVersion, springVersion, udpPort, serverMode)
 
     def in_SERVERMSG(self, msg):
-        print("[SERVERMSG][time=%d::iter=%d] %s" % (time.time(), self.iters, msg))
+        print(("[SERVERMSG][time=%d::iter=%d] %s" % (time.time(), self.iters, msg)))
 
     def in_AGREEMENT(self, msg):
         pass
 
     def in_AGREEMENTEND(self):
-        print("[AGREEMENDEND][time=%d::iter=%d]" % (time.time(), self.iters))
+        print(("[AGREEMENDEND][time=%d::iter=%d]" % (time.time(), self.iters)))
         assert (self.accepted_registration)
         assert (not self.accepted_authentication)
 
@@ -550,7 +548,7 @@ class LobbyClient:
         self.out_LOGIN()
 
     def in_REGISTRATIONACCEPTED(self):
-        print("[REGISTRATIONACCEPTED][time=%d::iter=%d]" % (time.time(), self.iters))
+        print(("[REGISTRATIONACCEPTED][time=%d::iter=%d]" % (time.time(), self.iters)))
 
         # account did not exist and was created
         self.accepted_registration = True
@@ -559,18 +557,18 @@ class LobbyClient:
         self.out_LOGIN()
 
     def in_REGISTRATIONDENIED(self, msg):
-        print("[REGISTRATIONDENIED][time=%d::iter=%d] %s" % (time.time(), self.iters, msg))
+        print(("[REGISTRATIONDENIED][time=%d::iter=%d] %s" % (time.time(), self.iters, msg)))
 
         self.rejected_registration = True
 
     def in_ACCEPTED(self, msg):
-        print("[LOGINACCEPTED][time=%d::iter=%d]" % (time.time(), self.iters))
+        print(("[LOGINACCEPTED][time=%d::iter=%d]" % (time.time(), self.iters)))
 
         # if we get here, everything checks out
         self.accepted_authentication = True
 
     def in_DENIED(self, msg):
-        print("[DENIED][time=%d::iter=%d] %s" % (time.time(), self.iters, msg))
+        print(("[DENIED][time=%d::iter=%d] %s" % (time.time(), self.iters, msg)))
 
         # login denied, try to register first
         # nothing we can do if that also fails
@@ -619,8 +617,8 @@ class LobbyClient:
         self.num_ping_msgs += 1
 
         if (False and self.prv_ping_time != 0.0):
-            print("[PONG] max=%0.3fs min=%0.3fs avg=%0.3fs" % (
-            self.max_ping_time, self.min_ping_time, (self.sum_ping_time / self.num_ping_msgs)))
+            print(("[PONG] max=%0.3fs min=%0.3fs avg=%0.3fs" % (
+            self.max_ping_time, self.min_ping_time, (self.sum_ping_time / self.num_ping_msgs))))
 
         self.prv_ping_time = time.time()
 
@@ -641,7 +639,7 @@ class LobbyClient:
         self.out_SAYPRIVATE(user, "You said: " + msg)
 
     def in_SAYPRIVATE(self, msg):
-        print
+        print()
         "SAY " + msg
 
     def Update(self):

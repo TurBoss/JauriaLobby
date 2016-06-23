@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/bin/env python
 
 """
     Hey, this is GPLv3 and copyright 2016 TurBoss from Jauria-Studios
@@ -18,7 +18,7 @@ import socket
 import threading
 
 gi.require_version('Gtk', '3.0')
-gi.require_version('WebKit2', '3.0')
+#gi.require_version('WebKit2', '3.0')
 
 from gi.repository import Gtk
 from gi.repository import Gdk
